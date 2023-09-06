@@ -6,6 +6,12 @@ https://www.synacktiv.com/publications/gpoddity-exploiting-active-directory-gpos
 
 # Installation
 
+## Pipx
+
+`python3 -m pipx install git+https://github.com/synacktiv/GPOddity`
+
+## Manual
+
 Installation is straightforward, clone the repository and install the dependencies.
 
 ```
