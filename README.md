@@ -8,11 +8,15 @@ https://www.synacktiv.com/publications/gpoddity-exploiting-active-directory-gpos
 
 ## Pipx
 
-`python3 -m pipx install git+https://github.com/synacktiv/GPOddity`
+You can install GPOddity through pipx with the following command:
+
+```
+python3 -m pipx install git+https://github.com/synacktiv/GPOddity
+```
 
 ## Manual
 
-Installation is straightforward, clone the repository and install the dependencies.
+Alternatively, you can instal GPOddity manually by cloning the repository and installing the dependencies:
 
 ```
 $ git clone https://github.com/synacktiv/GPOddity
