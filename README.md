@@ -16,7 +16,7 @@ python3 -m pipx install git+https://github.com/synacktiv/GPOddity
 
 ## Manual
 
-Alternatively, you can instal GPOddity manually by cloning the repository and installing the dependencies:
+Alternatively, you can install GPOddity manually by cloning the repository and installing the dependencies:
 
 ```
 $ git clone https://github.com/synacktiv/GPOddity
