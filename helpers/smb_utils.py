@@ -6,9 +6,12 @@ from    functools import partial
 from    conf import OUTPUT_DIR
 from    impacket.smbconnection import SMBConnection
 
-def get_smb_connection(dc_ip, username, password, domain):
+def get_smb_connection(dc_ip, username, password, hash, domain):
     smb_session = SMBConnection(dc_ip, dc_ip)
-    smb_session.login(username, password, domain)
+    if hash is not None:
+        smb_session.login(user=username, lmhash=hash.split(':')[0], nthash=hash.split(':')[1], password=None, domain=domain)
+    else:
+        smb_session.login(user=username, password=password, domain=domain)
     return smb_session
 
 

