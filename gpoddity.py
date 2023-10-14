@@ -276,7 +276,3 @@ def entrypoint():
     
 if __name__ == "__main__":
     typer.run(main)
-
-
-# TODO
-# > Coherence checks on arguments
