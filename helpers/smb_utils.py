@@ -41,15 +41,41 @@ def recursive_smb_download(smb_session, share, remote_path, local_path):
             callback = partial(write_data_to_file, os.path.join(local_path, item.get_longname()))
             smb_session.getFile(share, os.path.join(remote_path, item.get_longname()), callback)
 
+def create_empty_gpo(smb_session, domain, gpo_id):
+    try:
+        tid = smb_session.connectTree("SYSVOL")
+        logging.debug(f"Connected to SYSVOL share")
+    except Exception as e:
+        logging.error(f"Unable to connect to SYSVOL share", exc_info=True)
+        raise e
 
+    path = domain + "/Policies/{" + gpo_id + "}"
+
+    try:
+        shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        items = smb_session.listPath("SYSVOL", os.path.join(path, '*'))
+        for item in items:
+            if item.get_longname().lower() != 'gpt.ini':
+                continue
+            else:
+                callback = partial(write_data_to_file, os.path.join(OUTPUT_DIR, item.get_longname()))
+                smb_session.getFile("SYSVOL", os.path.join(path, item.get_longname()), callback)
+                logging.debug("Successfully initialized empty GPO {} from SYSVOL".format(gpo_id))
+                return
+        raise Exception
+    except Exception as e:
+        logging.error("Couldn't initialize empty GPO {} (maybe it does not exist?)".format(gpo_id), exc_info=True)
+        raise e
+    
 
 def download_initial_gpo(smb_session, domain, gpo_id):
     try:
         tid = smb_session.connectTree("SYSVOL")
         logging.debug(f"Connected to SYSVOL share")
-    except:
+    except Exception as e:
         logging.error(f"Unable to connect to SYSVOL share", exc_info=True)
-        return False
+        raise e
     
     path = domain + "/Policies/{" + gpo_id + "}"
     
@@ -58,7 +84,7 @@ def download_initial_gpo(smb_session, domain, gpo_id):
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         recursive_smb_download(smb_session, "SYSVOL", path, OUTPUT_DIR)
         logging.debug("Successfully cloned GPO {} from SYSVOL".format(gpo_id))
-    except:
+    except Exception as e:
         logging.error("Couldn't clone GPO {} (maybe it does not exist?)".format(gpo_id), exc_info=True)
-        return False
+        raise e
     

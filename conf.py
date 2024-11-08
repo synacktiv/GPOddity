@@ -4,6 +4,11 @@ class GPOTypes(str, Enum):
     user = "user"
     computer = "computer"
 
+class SMBModes(str, Enum):
+    embedded = "embedded"
+    forwarded = "forwarded"
+    none = "none"
+
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
