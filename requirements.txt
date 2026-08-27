@@ -1,2 +1,4 @@
-impacket
 typer[all]
+gssapi
+ldap3-bleeding-edge >= 2.10.1.1337
+gpblib @ git+https://github.com/synacktiv/gpblib@master#egg=gpblib
