@@ -60,33 +60,12 @@ modules=/home/user/modules/ImmediateTask_computer.ini
 #command-shell=cmd
 ```
 
-
-# Installation
-
-## Pipx
-
-You can install GPOddity through pipx with the following command:
-
-```
-$ python3 -m pipx install git+https://github.com/synacktiv/GPOddity
-```
-
-## Manual
-
-Alternatively, you can install GPOddity manually by cloning the repository and installing the dependencies:
-
-```
-$ git clone https://github.com/synacktiv/GPOddity
-$ python3 -m pip install -r requirements.txt
-```
-
-
 # About cleaning
 
-By default, GPOddity will perform cleaning actions and among others restore the original gPCFIleSysPath value in the target domain. In case the exploit could not exit properly, GPOddity creates a cleaning file each time the exploit is executed, that can be used later on to restore legitimate values by using the `--clean` flag; for instance:
+By default, GPOddity will perform cleaning actions and among others restore the original gPCFIleSysPath value in the target domain. In case the exploit could not exit properly, GPOddity creates a cleaning folder each time the exploit is executed, that can be used later on to restore legitimate values by using the `--clean` flag; for instance:
 
 ```bash
-$ python3 OUned.py --config config.example.ini --clean cleaning/FINANCE/2024_04_14-05_02_46.txt
+$ python3 gpoddity.py --clean cleaning/2026_08_24_063428_381577/ --config config.ini
 ```
 
 
