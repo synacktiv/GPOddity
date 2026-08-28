@@ -71,4 +71,4 @@ $ python3 gpoddity.py --clean cleaning/2026_08_24_063428_381577/ --config config
 
 # Video demonstration
 
-![demo](./assets/demo.gif)
+For a video demonstration, see `assets/demo.gif`.
